@@ -23,6 +23,19 @@ La aplicación tiene cuatro roles:
 - **Domiciliario:** puede ser una cuenta creada por administración o un usuario estudiante cuya solicitud fue aprobada. El estudiante activa o pausa su disponibilidad cuando quiera; consulta dirección e indicaciones, acepta pedidos disponibles y actualiza la entrega. Ve el teléfono solo después de aceptar un pedido activo.
 - **Administrador:** consulta resúmenes e informes por período, registra comercios, crea y activa/desactiva cuentas, aprueba o rechaza solicitudes de estudiantes y supervisa pedidos.
 
+### Cuentas demo de esta instalación local
+
+Se generaron estas cuentas en la base local `data/comanda.sqlite`; no están incluidas en el repositorio ni en una instalación nueva:
+
+| Rol | Correo |
+| --- | --- |
+| Usuario | `usuario.demo@example.com` |
+| Tienda | `tienda.demo@example.com` |
+| Domiciliario | `domiciliario.demo@example.com` |
+| Administrador | `admin.demo@example.com` |
+
+Las contraseñas aleatorias están únicamente en `data/demo-credentials.txt`, un archivo excluido por Git. No copies credenciales a este README público ni uses estas cuentas en producción.
+
 El dominio de registro inicial es `uniguajira.edu.co`; se puede cambiar con `INSTITUTIONAL_EMAIL_DOMAIN` y debe confirmarse con la Universidad. Crea el primer administrador desde una terminal interactiva:
 
 ```powershell
