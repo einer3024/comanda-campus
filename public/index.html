@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f6f1e7" />
+    <meta name="description" content="Prototipo de pedidos para la comunidad de la Universidad de La Guajira." />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+    <title>COMANDA — Tu campus, a un pedido</title>
+  </head>
+  <body>
+    <main class="auth-screen" id="auth-screen">
+      <a class="brand auth-brand" href="/" aria-label="COMANDA inicio"><span class="brand-icon">C</span><span>comanda<span class="brand-dot">.</span></span></a>
+      <section class="auth-card">
+        <span class="eyebrow">UN CAMPUS QUE SE CONECTA</span>
+        <h1>Bienvenido a COMANDA</h1>
+        <p class="auth-intro">Ingresa con tu cuenta o crea una cuenta de usuario para explorar el prototipo.</p>
+        <div class="auth-tabs" role="tablist">
+          <button class="auth-tab active" id="login-tab" type="button" role="tab" aria-selected="true" aria-controls="login-panel">Iniciar sesión</button>
+          <button class="auth-tab" id="register-tab" type="button" role="tab" aria-selected="false" aria-controls="register-panel">Crear cuenta</button>
+        </div>
+        <p class="auth-error" id="auth-error" role="alert" hidden></p>
+        <form class="auth-form" id="login-panel">
+          <label for="login-email">Correo electrónico</label>
+          <input id="login-email" name="email" type="email" maxlength="120" autocomplete="username" required />
+          <label for="login-password">Contraseña</label>
+          <input id="login-password" name="password" type="password" maxlength="200" autocomplete="current-password" required />
+          <button class="button button-dark full" type="submit">Entrar</button>
+        </form>
+        <form class="auth-form" id="register-panel" hidden>
+          <label for="register-name">Nombre</label>
+          <input id="register-name" name="name" type="text" maxlength="80" autocomplete="name" required />
+          <label for="register-email">Correo institucional</label>
+          <input id="register-email" name="email" type="email" maxlength="120" autocomplete="email" placeholder="nombre@uniguajira.edu.co" required />
+          <label for="register-password">Contraseña (mínimo 12 caracteres)</label>
+          <input id="register-password" name="password" type="password" minlength="12" maxlength="200" autocomplete="new-password" required />
+          <button class="button button-dark full" type="submit">Crear cuenta de usuario</button>
+          <p class="disclaimer">Tiendas, domiciliarios y administradores son creados por un administrador.</p>
+        </form>
+        <p class="auth-footnote">La autenticación está en modo prototipo. Confirma con la Universidad el dominio institucional requerido.</p>
+      </section>
+    </main>
+
+    <div id="app-shell" hidden>
+    <div class="demo-banner"><span></span> Prototipo local · No se realizan cobros</div>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="COMANDA inicio"><span class="brand-icon">C</span><span>comanda<span class="brand-dot">.</span></span></a>
+      <div class="location-pill"><span>⌖</span><div><small>ENTREGA EN</small><strong id="location-label">Elige tu aula</strong></div><button id="change-location" type="button" aria-label="Cambiar ubicación">⌄</button></div>
+      <div class="account-actions"><span id="account-label"></span><button class="logout-button" id="logout" type="button">Salir</button></div>
+      <button class="cart-button" id="open-cart" type="button">Mi pedido <span id="cart-count">0</span></button>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-content">
+          <span class="eyebrow">TU CAMPUS, MÁS CERCA</span>
+          <h1>Lo que necesitas,<br />sin salir de <em>clase.</em></h1>
+          <p>Antojos, almuerzos y útiles. Pídelos desde donde estés y coordina la entrega dentro del campus.</p>
+          <a class="button button-dark" href="#catalogo">Explorar comercios <span>↘</span></a>
+          <div class="hero-footnote">Hecho para la comunidad de la Universidad de La Guajira</div>
+        </div>
+        <div class="hero-illustration" aria-hidden="true">
+          <div class="illustration-sun"></div><div class="paper-card">📒</div><div class="food-card">🫓</div><div class="drink-card">🧃</div>
+          <div class="delivery-note"><span>🧑🏽‍🎓</span><div><strong>Un campus que se ayuda</strong><small>Comercios y estudiantes, conectados</small></div></div>
+        </div>
+      </section>
+
+      <section class="catalog section-wrap" id="catalogo">
+        <div class="section-heading"><div><span class="eyebrow">ALIADOS DEL CAMPUS</span><h2>¿Qué se te antoja?</h2></div><span class="soft-label">Catálogo de demostración</span></div>
+        <label class="search"><span>⌕</span><input id="search" type="search" placeholder="Busca comida, bebidas o útiles..." autocomplete="off" /></label>
+        <div class="filters" id="filters" aria-label="Filtrar por categoría">
+          <button class="filter active" data-category="Todos" type="button">Todo</button>
+          <button class="filter" data-category="Comidas" type="button">🥪 Comidas</button>
+          <button class="filter" data-category="Bebidas" type="button">🥤 Bebidas</button>
+          <button class="filter" data-category="Snacks" type="button">🍪 Snacks</button>
+          <button class="filter" data-category="Papelería" type="button">✏️ Papelería</button>
+        </div>
+        <div class="store-list" id="stores"></div>
+        <div class="products-heading"><h3 id="products-title">Popular en el campus</h3><button class="text-link" id="clear-filters" type="button">Ver todo →</button></div>
+        <div class="product-grid" id="products" aria-live="polite"></div>
+        <p class="empty-state" id="empty-state" hidden>No hay productos que coincidan. Prueba otra búsqueda o categoría.</p>
+        <p class="error-message" id="catalog-error" role="alert" hidden></p>
+      </section>
+
+      <section class="steps section-wrap">
+        <div><span class="step-number">01</span><h3>Elige tu ubicación</h3><p>Indica bloque, piso y aula para el piloto.</p></div>
+        <div><span class="step-number">02</span><h3>Arma tu pedido</h3><p>Explora un solo establecimiento por pedido.</p></div>
+        <div><span class="step-number">03</span><h3>Coordina la entrega</h3><p>Sigue el estado del pedido y consulta los avisos del panel.</p></div>
+      </section>
+    </main>
+
+    <section class="role-dashboard section-wrap" id="role-dashboard" hidden>
+      <div class="section-heading"><div><span class="eyebrow" id="role-eyebrow">PANEL</span><h2 id="role-title"></h2></div><button class="text-link" id="refresh-dashboard" type="button">Actualizar ↻</button></div>
+      <p class="dashboard-error" id="dashboard-error" role="alert" hidden></p>
+      <section class="notification-center" aria-labelledby="notification-title">
+        <div class="notification-heading">
+          <div><span class="eyebrow">ACTUALIZACIONES</span><h3 id="notification-title">Avisos <span id="notification-count"></span></h3></div>
+          <p>Recibe aquí novedades de pedidos y entregas mientras el panel esté abierto.</p>
+        </div>
+        <div id="notifications-list" class="notifications-list" aria-live="polite"></div>
+      </section>
+      <section id="rider-enrollment" class="notification-center" hidden aria-labelledby="rider-enrollment-title">
+        <div class="notification-heading">
+          <div><span class="eyebrow">OPORTUNIDAD UNIVERSITARIA</span><h3 id="rider-enrollment-title">Reparte en tus tiempos libres</h3></div>
+          <p id="rider-application-status">Solicita ser domiciliario. Administración revisará tu solicitud y podrás activar tu disponibilidad cuando te aprueben.</p>
+        </div>
+        <button class="button button-dark" id="rider-apply" type="button">Solicitar acceso como domiciliario</button>
+      </section>
+      <div id="customer-panel" hidden><h3>Mis pedidos</h3><p class="order-cancel-note">Puedes cancelar un pedido recibido o confirmado antes de que la tienda inicie la preparación.</p><div id="customer-orders" class="order-list"></div></div>
+      <div id="store-panel" hidden>
+        <div class="workspace-banner store-banner">
+          <div class="workspace-avatar" id="store-avatar">☕</div>
+          <div class="workspace-identity"><span class="eyebrow">ESPACIO DE COMERCIO</span><h3 id="store-name">Mi tienda</h3><p id="store-type">Gestiona pedidos y catálogo</p></div>
+          <button class="store-state-button" id="store-open-toggle" type="button"><span id="store-state-dot"></span><span id="store-state-label">Abierta</span><span>· Cambiar estado</span></button>
+        </div>
+        <div class="metric-grid" id="store-metrics"></div>
+        <nav class="dashboard-tabs" id="store-tabs" aria-label="Secciones de tienda">
+          <button class="dashboard-tab active" type="button" data-store-tab="orders">Pedidos <span id="store-order-count"></span></button>
+          <button class="dashboard-tab" type="button" data-store-tab="catalog">Mi catálogo</button>
+        </nav>
+        <section class="dashboard-view" id="store-orders-view">
+          <div class="view-heading"><div><h3>Pedidos recientes</h3><p>Actualiza cada pedido conforme lo preparas.</p></div><div class="filter-pills" id="store-order-filters"><button class="filter-pill active" data-order-filter="all" type="button">Todos</button><button class="filter-pill" data-order-filter="created" type="button">Nuevos</button><button class="filter-pill" data-order-filter="preparing" type="button">En preparación</button><button class="filter-pill" data-order-filter="ready" type="button">Listos</button></div></div>
+          <div id="store-orders" class="order-list"></div>
+        </section>
+        <section class="dashboard-view" id="store-catalog-view" hidden>
+          <div class="view-heading"><div><h3>Productos y disponibilidad</h3><p>Actualiza el precio o pausa productos agotados.</p></div><button class="button button-dark" id="show-product-form" type="button">＋ Agregar producto</button></div>
+          <form id="create-product-form" class="inline-create-form" hidden>
+            <label for="product-name">Nombre<input id="product-name" name="name" maxlength="100" required /></label>
+            <label for="product-category">Categoría<select id="product-category" name="category" required><option>Comidas</option><option>Bebidas</option><option>Snacks</option><option>Papelería</option></select></label>
+            <label for="product-price">Precio (COP)<input id="product-price" name="price" type="number" min="0" max="1000000" step="1" required /></label>
+            <label for="product-emoji">Ícono<input id="product-emoji" name="emoji" maxlength="12" placeholder="🍽️" /></label>
+            <button class="button button-dark" type="submit">Guardar producto</button>
+            <button class="button button-light" id="cancel-product-form" type="button">Cancelar</button>
+          </form>
+          <div id="store-products" class="store-product-list"></div>
+        </section>
+      </div>
+      <div id="rider-panel" hidden>
+        <div class="view-heading"><div><h3>Pedidos disponibles y asignados</h3><p class="order-cancel-note">Antes de aceptar verás la ubicación, las indicaciones y el nombre; el teléfono aparece solo después de aceptar el pedido.</p></div><button class="button button-light" id="rider-availability" type="button" aria-pressed="false">Activar disponibilidad</button></div>
+        <p id="rider-availability-status" class="disclaimer"></p>
+        <div id="rider-orders" class="order-list"></div>
+      </div>
+      <div id="admin-panel" hidden>
+        <div class="metric-grid" id="admin-metrics"></div>
+        <nav class="dashboard-tabs" id="admin-tabs" aria-label="Secciones administrativas">
+          <button class="dashboard-tab active" type="button" data-admin-tab="overview">Resumen</button>
+          <button class="dashboard-tab" type="button" data-admin-tab="stores">Comercios</button>
+          <button class="dashboard-tab" type="button" data-admin-tab="accounts">Cuentas</button>
+          <button class="dashboard-tab" type="button" data-admin-tab="rider-applications">Solicitudes <span id="rider-application-count"></span></button>
+          <button class="dashboard-tab" type="button" data-admin-tab="orders">Pedidos</button>
+          <button class="dashboard-tab" type="button" data-admin-tab="reports">Reportes</button>
+        </nav>
+        <section class="dashboard-view" id="admin-overview-view">
+          <div class="view-heading"><div><h3>Actividad de la plataforma</h3><p>Estado actual de pedidos y comunidad.</p></div></div>
+          <div class="status-overview" id="admin-status-overview"></div>
+        </section>
+        <section class="dashboard-view" id="admin-stores-view" hidden>
+          <div class="view-heading"><div><h3>Comercios del campus</h3><p>Registra un comercio para luego asignarle su cuenta de tienda.</p></div></div>
+          <form id="create-store-form" class="inline-create-form">
+            <label for="new-store-name">Nombre<input id="new-store-name" name="name" maxlength="80" required /></label>
+            <label for="new-store-type">Tipo<input id="new-store-type" name="type" maxlength="50" placeholder="Cafetería, papelería..." required /></label>
+            <label for="new-store-emoji">Ícono<input id="new-store-emoji" name="emoji" maxlength="12" placeholder="🏪" /></label>
+            <button class="button button-dark" type="submit">＋ Agregar comercio</button>
+          </form>
+          <div id="admin-stores" class="admin-store-list"></div>
+        </section>
+        <section class="dashboard-view" id="admin-accounts-view" hidden>
+          <div class="admin-columns">
+            <form id="create-user-form" class="admin-form">
+              <h3>Crear cuenta de equipo</h3>
+              <label for="new-name">Nombre</label><input id="new-name" name="name" maxlength="80" required />
+              <label for="new-email">Correo</label><input id="new-email" name="email" type="email" maxlength="120" required />
+              <label for="new-role">Rol</label><select id="new-role" name="role" required><option value="store">Tienda</option><option value="rider">Domiciliario</option><option value="admin">Administrador</option></select>
+              <label for="new-store" id="new-store-label">Comercio asociado</label><select id="new-store" name="storeId" required></select>
+              <label for="new-password">Contraseña inicial (mínimo 12 caracteres)</label><input id="new-password" name="password" type="password" minlength="12" maxlength="200" required />
+              <button class="button button-dark full" type="submit">Crear cuenta</button>
+            </form>
+            <div><h3>Cuentas registradas</h3><div id="admin-users" class="user-list"></div></div>
+          </div>
+        </section>
+        <section class="dashboard-view" id="admin-rider-applications-view" hidden>
+          <div class="view-heading"><div><h3>Solicitudes de domiciliario</h3><p>Aprueba a estudiantes que quieran repartir en sus tiempos libres.</p></div></div>
+          <div id="admin-rider-applications" class="user-list"></div>
+        </section>
+        <section class="dashboard-view" id="admin-orders-view" hidden>
+          <div class="view-heading"><div><h3>Todos los pedidos</h3><p>Consulta el estado y el recorrido de cada pedido.</p></div></div>
+          <div id="admin-orders" class="order-list"></div>
+        </section>
+        <section class="dashboard-view" id="admin-reports-view" hidden>
+          <div class="view-heading"><div><h3>Actividad y pedidos</h3><p>El valor corresponde a pedidos entregados; no representa cobros procesados.</p></div><label class="report-period" for="report-days">Período<select id="report-days"><option value="7">Últimos 7 días</option><option value="30" selected>Últimos 30 días</option><option value="90">Últimos 90 días</option></select></label></div>
+          <div class="metric-grid" id="admin-report-metrics"></div>
+          <div class="report-columns">
+            <section><h4>Por comercio</h4><div id="admin-report-stores"></div></section>
+            <section><h4>Actividad diaria</h4><div id="admin-report-daily"></div></section>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <div class="scrim" id="scrim" hidden></div>
+    <aside class="drawer" id="cart-drawer" aria-label="Mi pedido" aria-hidden="true">
+      <div class="drawer-head"><div><span class="eyebrow">TU SELECCIÓN</span><h2>Mi pedido <small id="drawer-count">(0)</small></h2></div><button class="icon-close" id="close-cart" type="button" aria-label="Cerrar">×</button></div>
+      <div id="cart-items" class="cart-items"></div>
+      <div id="cart-empty" class="cart-empty"><span>🛍️</span><h3>Tu pedido empieza aquí</h3><p>Agrega productos del catálogo para continuar.</p><button class="button button-dark" id="continue-shopping" type="button">Explorar productos</button></div>
+      <div id="cart-summary" class="cart-summary" hidden><div class="total-row"><span>Productos</span><strong id="subtotal"></strong></div><div class="total-row muted"><span>Domicilio</span><span>Según zona (demostración)</span></div><button class="button button-dark full" id="checkout-button" type="button">Continuar <span>→</span></button><p class="disclaimer">No se realiza ningún cobro ni se envía el pedido a un comercio.</p></div>
+    </aside>
+
+    <section class="modal" id="location-modal" role="dialog" aria-modal="true" aria-labelledby="location-title" hidden>
+      <div class="modal-head"><div><span class="eyebrow">PUNTO DE ENTREGA</span><h2 id="location-title">¿Dónde estás?</h2></div><button class="icon-close modal-close" type="button" aria-label="Cerrar">×</button></div>
+      <p class="modal-copy">Ubicación de demostración; confirma los bloques y aulas reales con la universidad.</p>
+      <form id="location-form">
+        <label for="block">Bloque</label><input id="block" name="block" type="number" min="1" max="99" placeholder="Ej. 6" required />
+        <label for="floor">Piso</label><select id="floor" name="floor" required><option value="">Selecciona un piso</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
+        <label for="classroom">Aula</label><input id="classroom" name="classroom" type="text" maxlength="12" placeholder="Ej. 304" required />
+        <button class="button button-dark full" type="submit">Guardar ubicación <span>→</span></button>
+      </form>
+    </section>
+
+    <section class="modal" id="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title" hidden>
+      <div class="modal-head"><div><span class="eyebrow">CONFIRMA TU PEDIDO</span><h2 id="checkout-title">Un último paso</h2></div><button class="icon-close modal-close" type="button" aria-label="Cerrar">×</button></div>
+      <p class="modal-copy">Entrega en <strong id="checkout-location"></strong>. Tarifa ilustrativa por zona; no se cobra en este prototipo.</p>
+      <form id="checkout-form">
+        <label for="zone">Zona de entrega (demostración)</label>
+        <select id="zone" name="deliveryZone" required><option value="near">Cerca · $2.000</option><option value="middle" selected>Intermedia · $3.000</option><option value="far">Lejos · $4.000</option></select>
+        <label for="payment">Método previsto</label>
+        <select id="payment" name="paymentMethod" required><option value="transfer">Transferencia directa al comercio</option><option value="cash">Efectivo</option></select>
+        <label for="contact-phone">Celular de contacto <span>(opcional)</span></label>
+        <input id="contact-phone" name="contactPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="24" placeholder="+57 300 123 4567" />
+        <p class="disclaimer contact-privacy">Solo la tienda de este pedido y el domiciliario que lo acepte podrán ver el número para coordinar la entrega.</p>
+        <label for="note">Indicación adicional <span>(opcional)</span></label>
+        <input id="note" name="note" maxlength="120" placeholder="Ej. entrada principal del bloque" />
+        <div class="checkout-total"><span>Total estimado</span><strong id="checkout-total"></strong></div>
+        <button class="button button-dark full" type="submit">Guardar pedido de prueba</button>
+        <p class="disclaimer">No se procesará ningún pago. La tienda recibirá un aviso dentro de COMANDA.</p>
+      </form>
+    </section>
+
+    <section class="modal result-modal" id="result-modal" role="dialog" aria-modal="true" aria-labelledby="result-title" hidden>
+      <button class="icon-close result-close modal-close" type="button" aria-label="Cerrar">×</button>
+      <div class="success-icon">✓</div><span class="eyebrow">REGISTRO LOCAL</span><h2 id="result-title">Pedido guardado</h2><p id="result-copy"></p>
+      <div class="status-card"><strong>Estado: recibido</strong><span>Consulta los cambios y avisos desde tu panel de pedidos.</span></div>
+      <button class="button button-dark full modal-close" type="button">Volver al catálogo</button>
+    </section>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js').catch(() => {});</script>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "comanda-campus",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prototipo local de pedidos para la comunidad universitaria.",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test",
+    "create-admin": "node scripts/create-admin.js",
+    "backup": "node scripts/backup-database.js"
+  }
+}
