@@ -51,6 +51,7 @@ function createDatabase(databasePath = path.join(__dirname, 'data', 'comanda.sql
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')),
       is_available INTEGER NOT NULL DEFAULT 0 CHECK (is_available IN (0, 1)),
+      schedule_json TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       reviewed_at TEXT,
       reviewed_by INTEGER REFERENCES users(id)
@@ -124,6 +125,11 @@ function createDatabase(databasePath = path.join(__dirname, 'data', 'comanda.sql
   `);
 
   const orderColumns = new Set(database.prepare('PRAGMA table_info(orders)').all().map((column) => column.name));
+  const riderProfileColumns = new Set(database.prepare('PRAGMA table_info(rider_profiles)').all().map((column) => column.name));
+  if (!riderProfileColumns.has('schedule_json')) {
+    database.exec("ALTER TABLE rider_profiles ADD COLUMN schedule_json TEXT NOT NULL DEFAULT '[]'");
+    database.exec("UPDATE rider_profiles SET is_available = 0 WHERE schedule_json = '[]'");
+  }
   if (!orderColumns.has('customer_user_id')) {
     database.exec('ALTER TABLE orders ADD COLUMN customer_user_id INTEGER REFERENCES users(id)');
   }
@@ -145,7 +151,7 @@ function createDatabase(databasePath = path.join(__dirname, 'data', 'comanda.sql
   `);
   database.prepare(`
     INSERT OR IGNORE INTO rider_profiles (user_id, status, is_available, created_at, reviewed_at)
-    SELECT id, 'approved', 1, created_at, created_at
+    SELECT id, 'approved', 0, created_at, created_at
     FROM users WHERE role = 'rider'
   `).run();
 

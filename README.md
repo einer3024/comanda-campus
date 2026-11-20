@@ -20,7 +20,7 @@ La aplicación tiene cuatro roles:
 
 - **Usuario:** se registra con correo institucional, consulta el catálogo y el historial, guarda su ubicación habitual en este navegador y puede añadir un celular opcional por pedido. También puede solicitar acceso como domiciliario sin perder su cuenta de usuario.
 - **Tienda:** cuenta creada por un administrador; ve y actualiza pedidos de su comercio, abre o cierra la tienda y administra su catálogo.
-- **Domiciliario:** puede ser una cuenta creada por administración o un usuario estudiante cuya solicitud fue aprobada. El estudiante activa o pausa su disponibilidad cuando quiera; consulta dirección e indicaciones, acepta pedidos disponibles y actualiza la entrega. Ve el teléfono solo después de aceptar un pedido activo.
+- **Domiciliario:** puede ser una cuenta creada por administración o un usuario estudiante cuya solicitud fue aprobada. Registra un horario semanal por días y horas, incluidos turnos nocturnos; el nombre corresponde a su cuenta. Solo puede activarse y recibir pedidos listos dentro de ese horario. Consulta los domicilios disponibles por separado de sus entregas aceptadas, y ve el teléfono solo después de aceptar un pedido activo.
 - **Administrador:** consulta resúmenes e informes por período, registra comercios, crea y activa/desactiva cuentas, aprueba o rechaza solicitudes de estudiantes y supervisa pedidos.
 
 ### Cuentas demo de esta instalación local
@@ -70,6 +70,7 @@ npm test
 - Contacto opcional por pedido y compartido solo con la tienda del pedido y el domiciliario que lo acepta mientras sigue activo.
 - Paneles de usuario, tienda, domiciliario y administrador con permisos verificados en la API.
 - Solicitud y aprobación administrativa para que estudiantes se sumen como domiciliarios, conservando su cuenta de usuario y controlando su disponibilidad.
+- Registro de horario semanal del domiciliario; la disponibilidad y los domicilios nuevos se limitan a esos días y horas (hora de Colombia).
 - Catálogo editable por tienda; gestión y activación de cuentas; reportes de pedidos y valor estimado entregado para administración.
 - Creación manual de copias consistentes de la base de datos SQLite.
 - PWA básica con shell estático en caché.

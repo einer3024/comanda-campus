@@ -28,6 +28,7 @@ const checkoutModal = $('#checkout-modal');
 const resultModal = $('#result-modal');
 let toastTimer;
 let notificationTimer;
+let loginChallengeId = '';
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({
@@ -267,7 +268,7 @@ function orderAction(order, role) {
   return [];
 }
 
-function renderOrders(element, orders, role) {
+function renderOrders(element, orders, role, emptyMessage = 'No hay pedidos para mostrar.') {
   const visibleOrders = role === 'store' && state.storeOrderFilter !== 'all'
     ? orders.filter((order) => {
       if (state.storeOrderFilter === 'created') return order.status === 'created';
@@ -276,7 +277,7 @@ function renderOrders(element, orders, role) {
     })
     : orders;
   if (visibleOrders.length === 0) {
-    element.innerHTML = '<p class="empty-state">No hay pedidos para mostrar.</p>';
+    element.innerHTML = `<p class="empty-state">${escapeHtml(emptyMessage)}</p>`;
     return;
   }
   element.innerHTML = visibleOrders.map((order) => {
@@ -304,6 +305,13 @@ function renderOrders(element, orders, role) {
       </article>
     `;
   }).join('');
+}
+
+function renderRiderOrders(orders) {
+  const available = orders.filter((order) => order.status === 'ready');
+  const assigned = orders.filter((order) => order.status !== 'ready');
+  renderOrders($('#rider-available-orders'), available, 'rider', 'No hay domicilios listos por ahora. La lista se actualiza automáticamente.');
+  renderOrders($('#rider-assigned-orders'), assigned, 'rider', 'Todavía no tienes entregas aceptadas.');
 }
 
 function formatDate(value) {
@@ -427,6 +435,7 @@ function renderRiderApplications(applications) {
       <strong>${escapeHtml(application.name)}</strong>
       <span>Estudiante · Solicitud pendiente</span>
       <small>${escapeHtml(application.email)} · ${escapeHtml(formatDate(application.createdAt))}</small>
+      <small>Horario: ${escapeHtml(formatRiderSchedule(application.riderSchedule))}</small>
       <div class="user-row-actions">
         <button class="button button-dark" type="button" data-rider-application="${application.userId}" data-status="approved">Aprobar</button>
         <button class="button button-light" type="button" data-rider-application="${application.userId}" data-status="rejected">Rechazar</button>
@@ -435,35 +444,157 @@ function renderRiderApplications(applications) {
   `).join('') || '<p class="empty-state">No hay solicitudes pendientes.</p>';
 }
 
+const riderDays = [
+  { day: 1, label: 'Lunes' },
+  { day: 2, label: 'Martes' },
+  { day: 3, label: 'Miércoles' },
+  { day: 4, label: 'Jueves' },
+  { day: 5, label: 'Viernes' },
+  { day: 6, label: 'Sábado' },
+  { day: 7, label: 'Domingo' },
+];
+
+function formatRiderSchedule(schedule = []) {
+  if (!schedule.length) return 'Sin horario registrado';
+  return schedule.map((entry) => {
+    const day = riderDays.find((item) => item.day === entry.day);
+    return `${day ? day.label : 'Día'} ${entry.start}–${entry.end}`;
+  }).join(', ');
+}
+
+function renderRiderScheduleForm(container, schedule = [], action = 'save', user) {
+  const savedSchedule = new Map(schedule.map((entry) => [entry.day, entry]));
+  const buttonLabel = action === 'apply'
+    ? 'Guardar horario y solicitar aprobación'
+    : action === 'pending' ? 'Actualizar horario' : 'Guardar horario';
+  container.innerHTML = `
+    <p class="rider-schedule-name">Perfil: <strong>${escapeHtml(user.name)}</strong></p>
+    <p class="rider-schedule-help">Elige los días y las horas en que puedes repartir. Hora de Colombia.</p>
+    <form class="rider-schedule-form" data-rider-schedule-action="${action}">
+      <div class="rider-week-grid">
+        ${riderDays.map(({ day, label }) => {
+          const entry = savedSchedule.get(day);
+          const enabled = Boolean(entry);
+          return `
+            <div class="rider-day-row">
+              <label class="rider-day-toggle"><input class="rider-schedule-enabled" type="checkbox" value="${day}" ${enabled ? 'checked' : ''} /><span>${label}</span></label>
+              <label>Desde<input class="rider-schedule-start" type="time" value="${escapeHtml(entry?.start || '08:00')}" ${enabled ? 'required' : 'disabled'} /></label>
+              <label>Hasta<input class="rider-schedule-end" type="time" value="${escapeHtml(entry?.end || '17:00')}" ${enabled ? 'required' : 'disabled'} /></label>
+            </div>
+          `;
+        }).join('')}
+      </div>
+      <button class="button button-dark" type="submit">${buttonLabel}</button>
+    </form>
+  `;
+}
+
 function renderRiderEnrollment(user) {
   const section = $('#rider-enrollment');
   const isCustomer = user.role === 'customer';
   section.hidden = !isCustomer || user.riderStatus === 'approved';
   if (!isCustomer) return;
-  const button = $('#rider-apply');
-  button.disabled = false;
   if (user.riderStatus === 'pending') {
     $('#rider-application-status').textContent = 'Tu solicitud está pendiente de revisión por administración.';
-    button.hidden = true;
+    renderRiderScheduleForm($('#rider-enrollment-schedule'), user.riderSchedule, 'pending', user);
   } else if (user.riderStatus === 'rejected') {
     $('#rider-application-status').textContent = 'Tu solicitud no fue aprobada. Puedes volver a solicitar acceso.';
-    button.textContent = 'Volver a solicitar acceso';
-    button.hidden = false;
+    renderRiderScheduleForm($('#rider-enrollment-schedule'), user.riderSchedule, 'apply', user);
   } else {
     $('#rider-application-status').textContent = 'Solicita ser domiciliario. Administración revisará tu solicitud y podrás activar tu disponibilidad cuando te aprueben.';
-    button.textContent = 'Solicitar acceso como domiciliario';
-    button.hidden = false;
+    renderRiderScheduleForm($('#rider-enrollment-schedule'), user.riderSchedule, 'apply', user);
   }
+}
+
+function renderRiderProfile(user) {
+  $('#rider-profile-name').textContent = `Domiciliario · ${user.name}`;
+  renderRiderScheduleForm($('#rider-profile-schedule'), user.riderSchedule, 'save', user);
 }
 
 function renderRiderAvailability(user) {
   const button = $('#rider-availability');
   button.setAttribute('aria-pressed', String(Boolean(user.riderAvailable)));
   button.textContent = user.riderAvailable ? 'Pausar disponibilidad' : 'Activar disponibilidad';
-  $('#rider-availability-status').textContent = user.riderAvailable
-    ? 'Estás disponible para recibir pedidos listos.'
-    : 'Estás pausado y no verás pedidos disponibles. Tus pedidos asignados siguen apareciendo aquí.';
+  $('#rider-availability-status').textContent = user.riderAvailable && user.riderWithinSchedule
+    ? 'Estás disponible para recibir pedidos listos dentro de tu horario.'
+    : user.riderAvailable
+      ? 'Tu horario no está activo ahora; no recibirás pedidos nuevos hasta el siguiente turno. Tus entregas aceptadas siguen aquí.'
+      : 'Estás pausado. Activa tu disponibilidad durante uno de tus turnos para recibir pedidos. Tus entregas aceptadas siguen aquí.';
 }
+
+function getRiderSchedule(form) {
+  return [...form.querySelectorAll('.rider-day-row')]
+    .filter((row) => row.querySelector('.rider-schedule-enabled').checked)
+    .map((row) => ({
+      day: Number(row.querySelector('.rider-schedule-enabled').value),
+      start: row.querySelector('.rider-schedule-start').value,
+      end: row.querySelector('.rider-schedule-end').value,
+    }));
+}
+
+async function submitRiderSchedule(event) {
+  event.preventDefault();
+  const form = event.target.closest('.rider-schedule-form');
+  if (!form) return;
+  if (!form.reportValidity()) return;
+  const schedule = getRiderSchedule(form);
+  if (!schedule.length) {
+    showToast('Selecciona al menos un día para tu horario.');
+    return;
+  }
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    const action = form.dataset.riderScheduleAction;
+    const result = await requestJson(
+      action === 'apply' ? '/api/rider/applications' : '/api/rider/schedule',
+      {
+        method: action === 'apply' ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schedule }),
+      },
+    );
+    if (action === 'apply') {
+      state.user = {
+        ...state.user,
+        riderStatus: 'pending',
+        riderAvailable: false,
+        riderSchedule: result.riderSchedule,
+        riderWithinSchedule: false,
+      };
+      renderRiderEnrollment(state.user);
+      showToast('Horario guardado y solicitud enviada para revisión.');
+    } else {
+      const { user } = await requestJson('/api/me');
+      state.user = user;
+      renderRiderEnrollment(user);
+      if (user.riderStatus === 'approved' || user.role === 'rider') {
+        renderRiderProfile(user);
+        renderRiderAvailability(user);
+      }
+      showToast('Horario actualizado. Activa tu disponibilidad cuando estés dentro de ese horario.');
+    }
+    await loadDashboard();
+  } catch (error) {
+    showToast(error.message);
+    button.disabled = false;
+  }
+}
+
+['#rider-enrollment-schedule', '#rider-profile-schedule'].forEach((selector) => {
+  const container = $(selector);
+  container.addEventListener('change', (event) => {
+    const checkbox = event.target.closest('.rider-schedule-enabled');
+    if (!checkbox) return;
+    const row = checkbox.closest('.rider-day-row');
+    [row.querySelector('.rider-schedule-start'), row.querySelector('.rider-schedule-end')]
+      .forEach((input) => {
+        input.disabled = !checkbox.checked;
+        input.required = checkbox.checked;
+      });
+  });
+  container.addEventListener('submit', submitRiderSchedule);
+});
 
 function renderAdminReport(report) {
   $('#admin-report-metrics').innerHTML = [
@@ -496,12 +627,15 @@ async function loadDashboard() {
     const elementByRole = {
       customer: '#customer-orders',
       store: '#store-orders',
-      rider: '#rider-orders',
       admin: '#admin-orders',
     };
-    renderOrders($(elementByRole[state.user.role]), orders, state.user.role);
-    if (isDualRider) renderOrders($('#rider-orders'), riderOrders, 'rider');
-    if (hasRiderAccess) renderRiderAvailability(state.user);
+    if (state.user.role === 'rider') renderRiderOrders(orders);
+    else renderOrders($(elementByRole[state.user.role]), orders, state.user.role);
+    if (isDualRider) renderRiderOrders(riderOrders);
+    if (hasRiderAccess) {
+      renderRiderAvailability(state.user);
+      renderRiderProfile(state.user);
+    }
     if (state.user.role === 'store') {
       const [profile, products] = await Promise.all([
         requestJson('/api/store/profile'),
@@ -555,7 +689,10 @@ async function showAuthenticatedApp(user) {
   $('#rider-panel').hidden = !(user.role === 'rider' || user.riderStatus === 'approved');
   $('#admin-panel').hidden = user.role !== 'admin';
   renderRiderEnrollment(user);
-  if (user.role === 'rider' || user.riderStatus === 'approved') renderRiderAvailability(user);
+  if (user.role === 'rider' || user.riderStatus === 'approved') {
+    renderRiderAvailability(user);
+    renderRiderProfile(user);
+  }
   $('.location-pill').hidden = !isCustomer;
   $('#open-cart').hidden = !isCustomer;
 
@@ -577,7 +714,11 @@ async function showAuthenticatedApp(user) {
   clearInterval(notificationTimer);
   notificationTimer = setInterval(() => {
     if (!state.user || document.hidden) return;
-    loadNotifications().catch((error) => showDashboardError(error.message));
+    if (state.user.role === 'rider' || state.user.riderStatus === 'approved') {
+      loadDashboard();
+    } else {
+      loadNotifications().catch((error) => showDashboardError(error.message));
+    }
     if (state.user.role === 'customer' && state.user.riderStatus === 'pending') {
       requestJson('/api/me').then(({ user: updatedUser }) => {
         if (updatedUser.riderStatus !== state.user.riderStatus) {
@@ -745,6 +886,21 @@ function showAuthTab(tab) {
 $('#login-tab').addEventListener('click', () => showAuthTab('login'));
 $('#register-tab').addEventListener('click', () => showAuthTab('register'));
 
+async function loadLoginChallenge() {
+  try {
+    const challenge = await requestJson('/api/auth/login/challenge');
+    loginChallengeId = challenge.challengeId;
+    $('#login-captcha-question').textContent = challenge.question;
+    $('#login-captcha-answer').value = '';
+  } catch (error) {
+    showAuthError(error.message);
+  }
+}
+
+$('#login-captcha-refresh').addEventListener('click', loadLoginChallenge);
+showAuthTab('login');
+loadLoginChallenge();
+
 $('#login-panel').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
@@ -757,6 +913,8 @@ $('#login-panel').addEventListener('submit', async (event) => {
       body: JSON.stringify({
         email: formData.get('email'),
         password: formData.get('password'),
+        challengeId: loginChallengeId,
+        challengeAnswer: formData.get('captchaAnswer'),
       }),
     });
     form.reset();
@@ -764,6 +922,7 @@ $('#login-panel').addEventListener('submit', async (event) => {
     await showAuthenticatedApp(result.user);
   } catch (error) {
     showAuthError(error.message);
+    await loadLoginChallenge();
   }
 });
 
@@ -801,6 +960,7 @@ $('#logout').addEventListener('click', async () => {
     $('#app-shell').hidden = true;
     $('#auth-screen').hidden = false;
     showAuthTab('login');
+    await loadLoginChallenge();
   } catch (error) {
     showToast(`No se pudo cerrar sesión: ${error.message}`);
   }
@@ -825,21 +985,6 @@ $('#role-dashboard').addEventListener('click', async (event) => {
     return;
   }
 
-  if (event.target.closest('#rider-apply')) {
-    const button = $('#rider-apply');
-    button.disabled = true;
-    try {
-      await requestJson('/api/rider/applications', { method: 'POST' });
-      state.user = { ...state.user, riderStatus: 'pending', riderAvailable: false };
-      renderRiderEnrollment(state.user);
-      showToast('Solicitud enviada para revisión.');
-    } catch (error) {
-      showToast(error.message);
-      button.disabled = false;
-    }
-    return;
-  }
-
   if (event.target.closest('#rider-availability')) {
     const button = $('#rider-availability');
     const isAvailable = button.getAttribute('aria-pressed') !== 'true';
@@ -850,7 +995,11 @@ $('#role-dashboard').addEventListener('click', async (event) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isAvailable }),
       });
-      state.user = { ...state.user, riderAvailable: isAvailable };
+      state.user = {
+        ...state.user,
+        riderAvailable: isAvailable,
+        riderWithinSchedule: isAvailable || state.user.riderWithinSchedule,
+      };
       renderRiderAvailability(state.user);
       await loadDashboard();
     } catch (error) {

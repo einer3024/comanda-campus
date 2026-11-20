@@ -27,8 +27,36 @@ async function postJson(baseUrl, route, body, cookie) {
   return fetch(`${baseUrl}${route}`, { method: 'POST', headers, body: JSON.stringify(body) });
 }
 
+async function loginJson(baseUrl, body) {
+  const challengeResponse = await fetch(`${baseUrl}/api/auth/login/challenge`);
+  const challenge = await challengeResponse.json();
+  const match = challenge.question.match(/(\d+) \+ (\d+)/);
+  const challengeAnswer = String(Number(match[1]) + Number(match[2]));
+  return postJson(baseUrl, '/api/auth/login', {
+    ...body,
+    challengeId: challenge.challengeId,
+    challengeAnswer,
+  });
+}
+
 function sessionCookie(response) {
   return response.headers.get('set-cookie').split(';')[0];
+}
+
+function currentBogotaIsoDay() {
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Bogota',
+    weekday: 'short',
+  }).format(new Date());
+  return { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 }[weekday];
+}
+
+function fullWeekSchedule() {
+  return Array.from({ length: 7 }, (_, index) => ({
+    day: index + 1,
+    start: '00:00',
+    end: '23:59',
+  }));
 }
 
 async function registerCustomer(baseUrl, suffix = 'cliente') {
@@ -46,6 +74,23 @@ async function registerCustomer(baseUrl, suffix = 'cliente') {
 
 test('registra usuarios, protege la sesión y guarda pedidos vinculados a su cuenta', async (t) => {
   const { database, baseUrl } = await startTestServer(t);
+  const captchaChallenge = await fetch(`${baseUrl}/api/auth/login/challenge`);
+  assert.equal(captchaChallenge.status, 200);
+  const captcha = await captchaChallenge.json();
+  const rejectedCaptcha = await postJson(baseUrl, '/api/auth/login', {
+    email: 'usuario@example.com',
+    password: 'contraseña-segura-123',
+    challengeId: captcha.challengeId,
+    challengeAnswer: 'incorrecta',
+  });
+  assert.equal(rejectedCaptcha.status, 400);
+  const reusedCaptcha = await postJson(baseUrl, '/api/auth/login', {
+    email: 'usuario@example.com',
+    password: 'contraseña-segura-123',
+    challengeId: captcha.challengeId,
+    challengeAnswer: '0',
+  });
+  assert.equal(reusedCaptcha.status, 400);
   const unauthenticated = await fetch(`${baseUrl}/api/stores`);
   assert.equal(unauthenticated.status, 401);
   const unauthenticatedNotifications = await fetch(`${baseUrl}/api/notifications`);
@@ -117,7 +162,7 @@ test('administra cuentas y limita pedidos a los cuatro roles', async (t) => {
     VALUES ('Admin de prueba', 'admin@comanda.test', ?, 'admin')
   `).run(adminHash);
 
-  const login = await postJson(baseUrl, '/api/auth/login', {
+  const login = await loginJson(baseUrl, {
     email: 'admin@comanda.test',
     password: adminPassword,
   });
@@ -131,7 +176,7 @@ test('administra cuentas y limita pedidos a los cuatro roles', async (t) => {
     role: 'admin',
   }, adminCookie);
   assert.equal(secondAdminAccount.status, 201);
-  const secondAdminLogin = await postJson(baseUrl, '/api/auth/login', {
+  const secondAdminLogin = await loginJson(baseUrl, {
     email: 'admin-secundario@comanda.test',
     password: 'clave-admin-secundario-123',
   });
@@ -162,6 +207,23 @@ test('administra cuentas y limita pedidos a los cuatro roles', async (t) => {
     role: 'rider',
   }, adminCookie);
   assert.equal(riderAccount.status, 201);
+  const riderLogin = await loginJson(baseUrl, {
+    email: 'rider@comanda.test',
+    password: 'clave-rider-prueba-123',
+  });
+  const riderCookie = sessionCookie(riderLogin);
+  const riderSchedule = await fetch(`${baseUrl}/api/rider/schedule`, {
+    method: 'PATCH',
+    headers: { Cookie: riderCookie, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ schedule: fullWeekSchedule() }),
+  });
+  assert.equal(riderSchedule.status, 200);
+  const riderAvailability = await fetch(`${baseUrl}/api/rider/availability`, {
+    method: 'PATCH',
+    headers: { Cookie: riderCookie, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isAvailable: true }),
+  });
+  assert.equal(riderAvailability.status, 200);
   const secondStoreAccount = await postJson(baseUrl, '/api/admin/users', {
     name: 'Otra cuenta tienda',
     email: 'otra-tienda@comanda.test',
@@ -211,7 +273,7 @@ test('administra cuentas y limita pedidos a los cuatro roles', async (t) => {
     items: [{ productId: 'arepa-huevo', quantity: 1 }],
   }, customer.cookie);
   const order = await createdOrder.json();
-  const storeLogin = await postJson(baseUrl, '/api/auth/login', {
+  const storeLogin = await loginJson(baseUrl, {
     email: 'tienda@comanda.test',
     password: 'clave-tienda-prueba-123',
   });
@@ -269,7 +331,7 @@ test('administra cuentas y limita pedidos a los cuatro roles', async (t) => {
   const history = (await customerOrders.json()).find((item) => item.orderCode === cancellableOrder.orderCode);
   assert.deepEqual(history.events.map((event) => event.toStatus), ['created', 'confirmed', 'cancelled']);
 
-  const otherStoreLogin = await postJson(baseUrl, '/api/auth/login', {
+  const otherStoreLogin = await loginJson(baseUrl, {
     email: 'otra-tienda@comanda.test',
     password: 'clave-otra-tienda-12345',
   });
@@ -330,11 +392,6 @@ test('administra cuentas y limita pedidos a los cuatro roles', async (t) => {
     const changed = await postJson(baseUrl, `/api/portal/orders/${order.orderCode}/status`, { status }, storeCookie);
     assert.equal(changed.status, 200);
   }
-  const riderLogin = await postJson(baseUrl, '/api/auth/login', {
-    email: 'rider@comanda.test',
-    password: 'clave-rider-prueba-123',
-  });
-  const riderCookie = sessionCookie(riderLogin);
   const availableRiderOrders = await fetch(`${baseUrl}/api/portal/orders`, { headers: { Cookie: riderCookie } });
   const availableRiderOrder = (await availableRiderOrders.json()).find((item) => item.orderCode === order.orderCode);
   assert.equal(availableRiderOrder.customerName, 'Usuario de prueba');
@@ -412,7 +469,7 @@ test('administra cuentas y limita pedidos a los cuatro roles', async (t) => {
     body: JSON.stringify({ isActive: true }),
   });
   assert.equal(reactivateSecondAdmin.status, 200);
-  const reactivatedAdminLogin = await postJson(baseUrl, '/api/auth/login', {
+  const reactivatedAdminLogin = await loginJson(baseUrl, {
     email: 'admin-secundario@comanda.test',
     password: 'clave-admin-secundario-123',
   });
@@ -461,14 +518,19 @@ test('permite a un estudiante solicitar, activar y pausar el acceso de domicilia
     INSERT INTO users (name, email, password_hash, role)
     VALUES ('Admin de prueba', 'admin-estudiantes@comanda.test', ?, 'admin')
   `).run(adminHash);
-  const adminLogin = await postJson(baseUrl, '/api/auth/login', {
+  const adminLogin = await loginJson(baseUrl, {
     email: 'admin-estudiantes@comanda.test',
     password: adminPassword,
   });
   const adminCookie = sessionCookie(adminLogin);
   const student = await registerCustomer(baseUrl, 'estudiante-domiciliario');
 
-  const application = await postJson(baseUrl, '/api/rider/applications', {}, student.cookie);
+  const unavailableDay = currentBogotaIsoDay() % 7 + 1;
+  const missingSchedule = await postJson(baseUrl, '/api/rider/applications', { schedule: [] }, student.cookie);
+  assert.equal(missingSchedule.status, 400);
+  const application = await postJson(baseUrl, '/api/rider/applications', {
+    schedule: [{ day: unavailableDay, start: '00:00', end: '23:59' }],
+  }, student.cookie);
   assert.equal(application.status, 201);
   assert.equal((await application.json()).status, 'pending');
   assert.equal((await fetch(`${baseUrl}/api/portal/orders`, {
@@ -497,10 +559,15 @@ test('permite a un estudiante solicitar, activar y pausar el acceso de domicilia
   assert.equal(currentUser.role, 'customer');
   assert.equal(currentUser.riderStatus, 'approved');
   assert.equal(currentUser.riderAvailable, false);
-  assert.equal((await postJson(baseUrl, '/api/rider/applications', {}, student.cookie)).status, 409);
+  assert.deepEqual(currentUser.riderSchedule, [{ day: unavailableDay, start: '00:00', end: '23:59' }]);
+  assert.equal((await postJson(baseUrl, '/api/rider/applications', {
+    schedule: fullWeekSchedule(),
+  }, student.cookie)).status, 409);
 
   const secondStudent = await registerCustomer(baseUrl, 'estudiante-rechazado');
-  assert.equal((await postJson(baseUrl, '/api/rider/applications', {}, secondStudent.cookie)).status, 201);
+  assert.equal((await postJson(baseUrl, '/api/rider/applications', {
+    schedule: fullWeekSchedule(),
+  }, secondStudent.cookie)).status, 201);
   const rejection = await fetch(`${baseUrl}/api/admin/rider-applications/${secondStudent.user.id}`, {
     method: 'PATCH',
     headers: { Cookie: adminCookie, 'Content-Type': 'application/json' },
@@ -509,7 +576,9 @@ test('permite a un estudiante solicitar, activar y pausar el acceso de domicilia
   assert.equal(rejection.status, 200);
   const rejectedStudent = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: secondStudent.cookie } });
   assert.equal((await rejectedStudent.json()).user.riderStatus, 'rejected');
-  assert.equal((await postJson(baseUrl, '/api/rider/applications', {}, secondStudent.cookie)).status, 201);
+  assert.equal((await postJson(baseUrl, '/api/rider/applications', {
+    schedule: fullWeekSchedule(),
+  }, secondStudent.cookie)).status, 201);
 
   const storePassword = 'clave-tienda-estudiantes-123';
   const storeHash = await hashPassword(storePassword);
@@ -517,7 +586,7 @@ test('permite a un estudiante solicitar, activar y pausar el acceso de domicilia
     INSERT INTO users (name, email, password_hash, role, store_id)
     VALUES ('Tienda de prueba', 'tienda-estudiantes@comanda.test', ?, 'store', 'cooperativa')
   `).run(storeHash);
-  const storeLogin = await postJson(baseUrl, '/api/auth/login', {
+  const storeLogin = await loginJson(baseUrl, {
     email: 'tienda-estudiantes@comanda.test',
     password: storePassword,
   });
@@ -542,6 +611,7 @@ test('permite a un estudiante solicitar, activar y pausar el acceso de domicilia
     );
     assert.equal(changed.status, 200);
   }
+  database.prepare('UPDATE rider_profiles SET is_available = 1 WHERE user_id = ?').run(student.user.id);
   const unavailableOrders = await fetch(`${baseUrl}/api/portal/orders`, {
     headers: { Cookie: student.cookie },
   });
@@ -559,7 +629,35 @@ test('permite a un estudiante solicitar, activar y pausar el acceso de domicilia
     headers: { Cookie: student.cookie, 'Content-Type': 'application/json' },
     body: JSON.stringify({ isAvailable: true }),
   });
-  assert.equal((await activate.json()).isAvailable, true);
+  assert.equal(activate.status, 409);
+  const invalidSchedule = await fetch(`${baseUrl}/api/rider/schedule`, {
+    method: 'PATCH',
+    headers: { Cookie: student.cookie, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ schedule: [{ day: 1, start: '08:00', end: '08:00' }] }),
+  });
+  assert.equal(invalidSchedule.status, 400);
+  const overnightSchedule = await fetch(`${baseUrl}/api/rider/schedule`, {
+    method: 'PATCH',
+    headers: { Cookie: student.cookie, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ schedule: [{ day: 1, start: '22:00', end: '02:00' }] }),
+  });
+  assert.equal(overnightSchedule.status, 200);
+  assert.deepEqual((await overnightSchedule.json()).riderSchedule, [
+    { day: 1, start: '22:00', end: '02:00' },
+  ]);
+  const savedSchedule = await fetch(`${baseUrl}/api/rider/schedule`, {
+    method: 'PATCH',
+    headers: { Cookie: student.cookie, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ schedule: fullWeekSchedule() }),
+  });
+  assert.equal(savedSchedule.status, 200);
+  const activateWithinSchedule = await fetch(`${baseUrl}/api/rider/availability`, {
+    method: 'PATCH',
+    headers: { Cookie: student.cookie, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isAvailable: true }),
+  });
+  assert.equal(activateWithinSchedule.status, 200);
+  assert.equal((await activateWithinSchedule.json()).isAvailable, true);
   const availableOrders = await fetch(`${baseUrl}/api/portal/orders`, {
     headers: { Cookie: student.cookie },
   });
@@ -648,10 +746,11 @@ test('migra una base anterior sin perder las tablas de pedidos', (t) => {
   assert.ok(migrated.prepare('PRAGMA table_info(orders)').all().some((column) => column.name === 'contact_phone'));
   assert.equal(migrated.prepare('SELECT name FROM stores WHERE id = ?').get('old-store').name, 'Comercio anterior');
   const migratedRider = migrated.prepare(`
-    SELECT status, is_available AS isAvailable
+    SELECT status, is_available AS isAvailable, schedule_json AS scheduleJson
     FROM rider_profiles WHERE user_id = 1
   `).get();
   assert.equal(migratedRider.status, 'approved');
-  assert.equal(migratedRider.isAvailable, 1);
+  assert.equal(migratedRider.isAvailable, 0);
+  assert.equal(migratedRider.scheduleJson, '[]');
   migrated.close();
 });

@@ -116,7 +116,53 @@ function publicUser(user) {
     storeId: user.storeId || null,
     riderStatus: user.role === 'rider' ? 'approved' : user.riderStatus || null,
     riderAvailable: Boolean(user.riderAvailable),
+    riderSchedule: user.riderSchedule || [],
+    riderWithinSchedule: isWithinRiderSchedule(user.riderSchedule || []),
   };
+}
+
+const RIDER_DAYS = Object.freeze({ Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 });
+
+function validateRiderSchedule(value) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 7) {
+    throw new HttpError(400, 'Selecciona al menos un día para tu horario.');
+  }
+  const days = new Set();
+  const schedule = value.map((entry) => {
+    if (
+      !entry || typeof entry !== 'object' || Array.isArray(entry) ||
+      !Number.isInteger(entry.day) || entry.day < 1 || entry.day > 7 ||
+      typeof entry.start !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(entry.start) ||
+      typeof entry.end !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(entry.end) ||
+      entry.start === entry.end || days.has(entry.day)
+    ) {
+      throw new HttpError(400, 'Revisa los días y las horas de tu disponibilidad.');
+    }
+    days.add(entry.day);
+    return { day: entry.day, start: entry.start, end: entry.end };
+  });
+  return schedule.sort((first, second) => first.day - second.day);
+}
+
+function isWithinRiderSchedule(schedule, now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Bogota',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  const day = RIDER_DAYS[values.weekday];
+  const time = `${values.hour}:${values.minute}`;
+  return Array.isArray(schedule) && schedule.some((entry) => {
+    if (entry.start < entry.end) {
+      return entry.day === day && entry.start <= time && time < entry.end;
+    }
+    const followingDay = entry.day === 7 ? 1 : entry.day + 1;
+    return (entry.day === day && time >= entry.start) ||
+      (followingDay === day && time < entry.end);
+  });
 }
 
 function requireUser(user) {
@@ -337,7 +383,7 @@ function listOrders(database, user, { asRider = false } = {}) {
     values = [user.storeId];
   } else if (riderView) {
     where = "((o.status = 'ready' AND o.rider_user_id IS NULL AND ? = 1) OR o.rider_user_id = ?)";
-    values = [user.riderAvailable ? 1 : 0, user.id];
+    values = [user.riderAvailable && isWithinRiderSchedule(user.riderSchedule) ? 1 : 0, user.id];
   } else {
     where = '1 = 1';
     values = [];
@@ -419,8 +465,8 @@ function changeOrderStatus(database, orderCode, nextStatus, actor, actorRole = a
   } else if (actorRole === 'rider') {
     const mayClaim = order.status === 'ready' && !order.riderUserId && nextStatus === 'accepted';
     const ownsOrder = order.riderUserId === actor.id;
-    if (mayClaim && !actor.riderAvailable) {
-      throw new HttpError(409, 'Activa tu disponibilidad antes de aceptar pedidos.');
+    if (mayClaim && (!actor.riderAvailable || !isWithinRiderSchedule(actor.riderSchedule))) {
+      throw new HttpError(409, 'Activa tu disponibilidad dentro de tu horario registrado antes de aceptar pedidos.');
     }
     if (!mayClaim && !ownsOrder) throw new HttpError(409, 'El pedido ya no está disponible para ti.');
     if (!mayClaim && !(riderTransitions[order.status] || []).includes(nextStatus)) {
@@ -474,12 +520,12 @@ function changeOrderStatus(database, orderCode, nextStatus, actor, actorRole = a
     }
     if (nextStatus === 'ready') {
       const riders = database.prepare(`
-        SELECT rp.user_id AS id
+        SELECT rp.user_id AS id, rp.schedule_json AS scheduleJson
         FROM rider_profiles rp
         JOIN users u ON u.id = rp.user_id
         WHERE rp.status = 'approved' AND rp.is_available = 1 AND u.is_active = 1
       `).all();
-      for (const rider of riders) {
+      for (const rider of riders.filter((item) => isWithinRiderSchedule(JSON.parse(item.scheduleJson)))) {
         addNotification(
           database,
           rider.id,
@@ -497,7 +543,7 @@ function changeOrderStatus(database, orderCode, nextStatus, actor, actorRole = a
   return { orderCode, status: nextStatus };
 }
 
-function applyToBeRider(database, userId) {
+function applyToBeRider(database, userId, submittedSchedule) {
   const profile = database.prepare(`
     SELECT status FROM rider_profiles WHERE user_id = ?
   `).get(userId);
@@ -506,28 +552,46 @@ function applyToBeRider(database, userId) {
       ? 'Tu perfil de domiciliario ya está aprobado.'
       : 'Tu solicitud ya está pendiente de revisión.');
   }
+  const schedule = validateRiderSchedule(submittedSchedule);
   database.prepare(`
-    INSERT INTO rider_profiles (user_id, status, is_available)
-    VALUES (?, 'pending', 0)
+    INSERT INTO rider_profiles (user_id, status, is_available, schedule_json)
+    VALUES (?, 'pending', 0, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       status = 'pending',
       is_available = 0,
+      schedule_json = excluded.schedule_json,
       created_at = datetime('now'),
       reviewed_at = NULL,
       reviewed_by = NULL
-  `).run(userId);
-  return { status: 'pending' };
+  `).run(userId, JSON.stringify(schedule));
+  return { status: 'pending', riderSchedule: schedule };
+}
+
+function setRiderSchedule(database, userId, submittedSchedule) {
+  const schedule = validateRiderSchedule(submittedSchedule);
+  const result = database.prepare(`
+    UPDATE rider_profiles
+    SET schedule_json = ?, is_available = 0
+    WHERE user_id = ? AND status IN ('pending', 'approved')
+  `).run(JSON.stringify(schedule), userId);
+  if (result.changes !== 1) {
+    throw new HttpError(403, 'Solo puedes guardar un horario con una solicitud pendiente o un perfil aprobado.');
+  }
+  return { riderSchedule: schedule, isAvailable: false };
 }
 
 function listRiderApplications(database) {
   return database.prepare(`
     SELECT rp.user_id AS userId, u.name, u.email,
-           rp.status, rp.created_at AS createdAt
+           rp.status, rp.created_at AS createdAt, rp.schedule_json AS scheduleJson
     FROM rider_profiles rp
     JOIN users u ON u.id = rp.user_id
     WHERE rp.status = 'pending' AND u.is_active = 1
     ORDER BY rp.created_at, rp.user_id
-  `).all();
+  `).all().map(({ scheduleJson, ...application }) => ({
+    ...application,
+    riderSchedule: JSON.parse(scheduleJson),
+  }));
 }
 
 function reviewRiderApplication(database, userId, status, reviewerId) {
@@ -557,6 +621,16 @@ function reviewRiderApplication(database, userId, status, reviewerId) {
 function setRiderAvailability(database, userId, isAvailable) {
   if (typeof isAvailable !== 'boolean') {
     throw new HttpError(400, 'Indica si quieres activar o pausar tu disponibilidad.');
+  }
+  if (isAvailable) {
+    const profile = database.prepare(`
+      SELECT schedule_json AS scheduleJson
+      FROM rider_profiles WHERE user_id = ? AND status = 'approved'
+    `).get(userId);
+    if (!profile) throw new HttpError(403, 'Tu perfil de domiciliario todavía no está aprobado.');
+    if (!isWithinRiderSchedule(JSON.parse(profile.scheduleJson))) {
+      throw new HttpError(409, 'Solo puedes activar tu disponibilidad dentro del horario que registraste.');
+    }
   }
   const result = database.prepare(`
     UPDATE rider_profiles
@@ -857,6 +931,7 @@ async function serveStatic(request, response, url, webRoot) {
 
 function createServer(database, webRoot = path.join(__dirname, 'public')) {
   const loginAttempts = new Map();
+  const loginChallenges = new Map();
   return http.createServer(async (request, response) => {
     try {
       const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
@@ -866,6 +941,18 @@ function createServer(database, webRoot = path.join(__dirname, 'public')) {
       if (url.pathname === '/api/health' && request.method === 'GET') {
         database.prepare('SELECT 1').get();
         sendJson(response, 200, { status: 'ok' });
+        return;
+      }
+
+      if (url.pathname === '/api/auth/login/challenge' && request.method === 'GET') {
+        const left = 2 + Math.floor(Math.random() * 8);
+        const right = 2 + Math.floor(Math.random() * 8);
+        const challengeId = randomUUID();
+        loginChallenges.set(challengeId, {
+          answer: String(left + right),
+          expiresAt: Date.now() + 5 * 60 * 1000,
+        });
+        sendJson(response, 200, { challengeId, question: `¿Cuánto es ${left} + ${right}?` });
         return;
       }
 
@@ -902,8 +989,15 @@ function createServer(database, webRoot = path.join(__dirname, 'public')) {
         const body = requireRecord(await readJsonBody(request));
         const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
         const password = typeof body.password === 'string' ? body.password : '';
+        const challengeId = typeof body.challengeId === 'string' ? body.challengeId : '';
+        const challengeAnswer = typeof body.challengeAnswer === 'string' ? body.challengeAnswer.trim() : '';
         if (email.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length > 200) {
           throw new HttpError(400, 'Revisa el correo y la contraseña.');
+        }
+        const challenge = loginChallenges.get(challengeId);
+        loginChallenges.delete(challengeId);
+        if (!challenge || challenge.expiresAt <= Date.now() || challengeAnswer !== challenge.answer) {
+          throw new HttpError(400, 'Resuelve correctamente la pregunta de seguridad.');
         }
         const attemptKey = `${request.socket.remoteAddress || 'local'}:${email}`;
         const current = loginAttempts.get(attemptKey);
@@ -913,6 +1007,7 @@ function createServer(database, webRoot = path.join(__dirname, 'public')) {
         const account = database.prepare(`
           SELECT u.id, u.name, u.email, u.role, u.store_id AS storeId,
                  rp.status AS riderStatus, rp.is_available AS riderAvailable,
+                 COALESCE(rp.schedule_json, '[]') AS riderScheduleJson,
                  u.password_hash AS passwordHash
           FROM users u
           LEFT JOIN rider_profiles rp ON rp.user_id = u.id
@@ -928,7 +1023,11 @@ function createServer(database, webRoot = path.join(__dirname, 'public')) {
         loginAttempts.delete(attemptKey);
         const session = createSession(database, account.id);
         response.setHeader('Set-Cookie', sessionCookie(session.token, process.env.COOKIE_SECURE === 'true'));
-        sendJson(response, 200, { user: publicUser(account) });
+        const accountWithSchedule = {
+          ...account,
+          riderSchedule: JSON.parse(account.riderScheduleJson),
+        };
+        sendJson(response, 200, { user: publicUser(accountWithSchedule) });
         return;
       }
 
@@ -956,7 +1055,14 @@ function createServer(database, webRoot = path.join(__dirname, 'public')) {
       }
       if (url.pathname === '/api/rider/applications' && request.method === 'POST') {
         requireRole(user, ['customer']);
-        sendJson(response, 201, applyToBeRider(database, user.id));
+        const body = requireRecord(await readJsonBody(request));
+        sendJson(response, 201, applyToBeRider(database, user.id, body.schedule));
+        return;
+      }
+      if (url.pathname === '/api/rider/schedule' && request.method === 'PATCH') {
+        requireUser(user);
+        const body = requireRecord(await readJsonBody(request));
+        sendJson(response, 200, setRiderSchedule(database, user.id, body.schedule));
         return;
       }
       if (url.pathname === '/api/rider/availability' && request.method === 'PATCH') {
@@ -1148,7 +1254,7 @@ function createServer(database, webRoot = path.join(__dirname, 'public')) {
           if (role === 'rider') {
             database.prepare(`
               INSERT INTO rider_profiles (user_id, status, is_available, reviewed_at, reviewed_by)
-              VALUES (?, 'approved', 1, datetime('now'), ?)
+              VALUES (?, 'approved', 0, datetime('now'), ?)
             `).run(Number(result.lastInsertRowid), user.id);
           }
           database.exec('COMMIT');

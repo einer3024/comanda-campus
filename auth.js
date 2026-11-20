@@ -40,13 +40,19 @@ function getUserForSession(database, token) {
   const user = database.prepare(`
     SELECT u.id, u.name, u.email, u.role, u.store_id AS storeId,
            CASE WHEN u.role = 'rider' THEN 'approved' ELSE rp.status END AS riderStatus,
-           CASE WHEN rp.is_available = 1 THEN 1 ELSE 0 END AS riderAvailable
+           CASE WHEN rp.is_available = 1 THEN 1 ELSE 0 END AS riderAvailable,
+           COALESCE(rp.schedule_json, '[]') AS riderScheduleJson
     FROM sessions s
     JOIN users u ON u.id = s.user_id
     LEFT JOIN rider_profiles rp ON rp.user_id = u.id
     WHERE s.token_hash = ? AND s.expires_at > ? AND u.is_active = 1
   `).get(tokenHash, now);
-  return user ? { ...user, riderAvailable: Boolean(user.riderAvailable) } : null;
+  if (!user) return null;
+  return {
+    ...user,
+    riderAvailable: Boolean(user.riderAvailable),
+    riderSchedule: JSON.parse(user.riderScheduleJson),
+  };
 }
 
 module.exports = {

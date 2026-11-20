@@ -32,6 +32,11 @@ a { color: inherit; text-decoration: none; }
 .auth-form label, .admin-form label { margin-top: 6px; font-size: 11px; font-weight: 700; }
 .auth-form input, .admin-form input, .admin-form select { width: 100%; height: 43px; padding: 0 12px; border: 1px solid var(--line); border-radius: 7px; outline: none; background: #fffefa; color: var(--ink); font-size: 12px; }
 .auth-form input:focus, .admin-form input:focus, .admin-form select:focus { border-color: #9c6752; box-shadow: 0 0 0 3px #9c67521c; }
+.captcha-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #f7f2e8; }
+.captcha-row strong, .captcha-row small { display: block; }
+.captcha-row strong { font-size: 12px; }
+.captcha-row small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.captcha-row button { width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 50%; background: white; cursor: pointer; }
 .auth-form .disclaimer { margin: 0; }
 .auth-footnote { margin: 17px 0 0; font-size: 10px; }
 .auth-error, .dashboard-error { padding: 10px 12px; border: 1px solid #e3b1a7; border-radius: 7px; background: #fff2ef; color: #8d392f; font-size: 11px; line-height: 1.5; }
@@ -155,6 +160,17 @@ h1, h2, h3, h4, p { margin-top: 0; }
 .notification-heading h3 span { color: var(--red); font-size: 10px; letter-spacing: 0; }
 .notification-heading > p { margin: 0; color: var(--muted); font-size: 10px; }
 .notifications-list { display: grid; gap: 7px; }
+.rider-schedule-name { margin: 0 0 11px; color: var(--muted); font-size: 11px; }
+.rider-schedule-name strong { color: var(--ink); }
+.rider-schedule-help { margin: -5px 0 10px; color: var(--muted); font-size: 10px; }
+.rider-schedule-form { display: grid; gap: 12px; }
+.rider-week-grid { display: grid; gap: 6px; }
+.rider-day-row { display: grid; grid-template-columns: minmax(110px, 1fr) repeat(2, minmax(100px, 150px)); align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--white); }
+.rider-day-toggle { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; }
+.rider-day-row > label:not(.rider-day-toggle) { display: grid; gap: 4px; color: var(--muted); font-size: 9px; font-weight: 700; }
+.rider-day-row input[type="time"] { width: 100%; min-height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: #fffefa; color: var(--ink); font-size: 11px; }
+.rider-day-row input:disabled { opacity: .5; }
+.rider-orders-section + .rider-orders-section { margin-top: 24px; }
 .notification-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--white); }
 .notification-card.unread { border-left: 3px solid var(--red); }
 .notification-copy { min-width: 0; display: grid; gap: 4px; }
@@ -332,6 +348,8 @@ button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
   .view-heading { align-items: start; flex-direction: column; }
   .notification-heading { align-items: start; flex-direction: column; }
   .notification-card { align-items: start; }
+  .rider-day-row { grid-template-columns: minmax(85px, 1fr) repeat(2, minmax(80px, 110px)); gap: 7px; padding: 7px; }
+  .rider-day-toggle { gap: 5px; font-size: 10px; }
   .filter-pills { justify-content: start; }
   .store-product-row { grid-template-columns: 38px minmax(0, 1fr) minmax(85px, 110px); gap: 9px; }
   .store-product-icon { width: 38px; height: 38px; }

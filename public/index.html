@@ -27,6 +27,12 @@
           <input id="login-email" name="email" type="email" maxlength="120" autocomplete="username" required />
           <label for="login-password">Contraseña</label>
           <input id="login-password" name="password" type="password" maxlength="200" autocomplete="current-password" required />
+          <div class="captcha-row">
+            <div><strong id="login-captcha-question">Pregunta de seguridad</strong><small>Protección contra intentos automatizados</small></div>
+            <button id="login-captcha-refresh" type="button" aria-label="Cambiar pregunta">↻</button>
+          </div>
+          <label for="login-captcha-answer">Respuesta de seguridad</label>
+          <input id="login-captcha-answer" name="captchaAnswer" type="text" inputmode="numeric" maxlength="4" autocomplete="off" required />
           <button class="button button-dark full" type="submit">Entrar</button>
         </form>
         <form class="auth-form" id="register-panel" hidden>
@@ -106,7 +112,7 @@
           <div><span class="eyebrow">OPORTUNIDAD UNIVERSITARIA</span><h3 id="rider-enrollment-title">Reparte en tus tiempos libres</h3></div>
           <p id="rider-application-status">Solicita ser domiciliario. Administración revisará tu solicitud y podrás activar tu disponibilidad cuando te aprueben.</p>
         </div>
-        <button class="button button-dark" id="rider-apply" type="button">Solicitar acceso como domiciliario</button>
+        <div id="rider-enrollment-schedule"></div>
       </section>
       <div id="customer-panel" hidden><h3>Mis pedidos</h3><p class="order-cancel-note">Puedes cancelar un pedido recibido o confirmado antes de que la tienda inicie la preparación.</p><div id="customer-orders" class="order-list"></div></div>
       <div id="store-panel" hidden>
@@ -138,9 +144,23 @@
         </section>
       </div>
       <div id="rider-panel" hidden>
-        <div class="view-heading"><div><h3>Pedidos disponibles y asignados</h3><p class="order-cancel-note">Antes de aceptar verás la ubicación, las indicaciones y el nombre; el teléfono aparece solo después de aceptar el pedido.</p></div><button class="button button-light" id="rider-availability" type="button" aria-pressed="false">Activar disponibilidad</button></div>
+        <div class="view-heading"><div><h3 id="rider-profile-name">Panel de domiciliario</h3><p class="order-cancel-note">Antes de aceptar verás la ubicación, las indicaciones y el nombre; el teléfono aparece solo después de aceptar el pedido.</p></div><button class="button button-light" id="rider-availability" type="button" aria-pressed="false">Activar disponibilidad</button></div>
         <p id="rider-availability-status" class="disclaimer"></p>
-        <div id="rider-orders" class="order-list"></div>
+        <section class="notification-center" aria-labelledby="rider-schedule-title">
+          <div class="notification-heading">
+            <div><span class="eyebrow">MI DISPONIBILIDAD</span><h3 id="rider-schedule-title">Horario semanal</h3></div>
+            <p>Horario de Colombia. Fuera de estos días y horas no aparecerán pedidos nuevos.</p>
+          </div>
+          <div id="rider-profile-schedule"></div>
+        </section>
+        <section class="rider-orders-section" aria-labelledby="rider-available-title">
+          <div class="view-heading"><div><h3 id="rider-available-title">Domicilios disponibles</h3><p>Pedidos listos que puedes aceptar durante tu horario.</p></div></div>
+          <div id="rider-available-orders" class="order-list"></div>
+        </section>
+        <section class="rider-orders-section" aria-labelledby="rider-assigned-title">
+          <div class="view-heading"><div><h3 id="rider-assigned-title">Mis entregas</h3><p>Pedidos que ya aceptaste y debes completar.</p></div></div>
+          <div id="rider-assigned-orders" class="order-list"></div>
+        </section>
       </div>
       <div id="admin-panel" hidden>
         <div class="metric-grid" id="admin-metrics"></div>
